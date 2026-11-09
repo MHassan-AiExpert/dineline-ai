@@ -36,22 +36,71 @@ export function toSpoken(text: string) {
     .replace(/,\s*([?.!])/g, "$1");
 }
 
-/** Speaks text sentence by sentence (avoids Chrome cutting long utterances) and calls done at the end. */
-export function speakText(text: string, done: () => void) {
+/**
+ * Speaks text sentence by sentence (avoids Chrome cutting long utterances) and calls done at the end.
+ * onCaption receives the words spoken so far, so captions can follow the voice word by word:
+ * from the browser's word-boundary events where available (Edge), otherwise paced to the speech rate.
+ */
+export function speakText(text: string, done: () => void, onCaption?: (spokenSoFar: string, full: string) => void) {
   const synth = typeof window !== "undefined" ? window.speechSynthesis : undefined;
-  if (!synth) return done();
+  const full = toSpoken(text).trim();
+  if (!synth) {
+    onCaption?.(full, full);
+    return done();
+  }
   synth.cancel();
-  const parts = toSpoken(text).split(/(?<=[.!?])\s+/).filter(Boolean);
+  const parts = full.split(/(?<=[.!?])\s+/).filter(Boolean);
   if (!parts.length) return done();
   const voice = pickVoice();
+  const RATE = 1.05;
+  const CHARS_PER_SEC = 15 * RATE; // typical speaking pace, used when the browser gives no word events
+  let shown = 0;
+  let timer: ReturnType<typeof setInterval> | null = null;
+
+  const reveal = (count: number) => {
+    const target = Math.min(full.length, Math.max(shown, count));
+    if (target === shown) return;
+    // cut at a word boundary so captions never show half a word
+    const cut = target >= full.length ? full.length : Math.max(shown, full.lastIndexOf(" ", target) + 1 || target);
+    shown = cut;
+    onCaption?.(full.slice(0, shown).trimEnd(), full);
+  };
+
+  onCaption?.("", full);
+  let offset = 0;
   parts.forEach((part, i) => {
-    const u = new SpeechSynthesisUtterance(part.trim());
+    const partStart = full.indexOf(part, offset);
+    offset = partStart + part.length;
+    const partEnd = offset;
+    const u = new SpeechSynthesisUtterance(part);
     if (voice) u.voice = voice;
-    u.rate = 1.05;
-    if (i === parts.length - 1) {
-      u.onend = done;
-      u.onerror = done;
-    }
+    u.rate = RATE;
+    let gotWords = false;
+    u.onstart = () => {
+      const t0 = Date.now();
+      if (timer) clearInterval(timer);
+      timer = setInterval(() => {
+        if (gotWords) return;
+        reveal(Math.min(partEnd, partStart + Math.round(((Date.now() - t0) / 1000) * CHARS_PER_SEC)));
+      }, 70);
+    };
+    u.onboundary = (e: SpeechSynthesisEvent) => {
+      if (e.name && e.name !== "word") return;
+      gotWords = true;
+      // show the word being spoken now
+      const nextSpace = part.indexOf(" ", e.charIndex);
+      reveal(partStart + (nextSpace === -1 ? part.length : nextSpace));
+    };
+    const finish = () => {
+      reveal(partEnd + 1);
+      if (i === parts.length - 1) {
+        if (timer) clearInterval(timer);
+        reveal(full.length);
+        done();
+      }
+    };
+    u.onend = finish;
+    u.onerror = finish;
     synth.speak(u);
   });
 }

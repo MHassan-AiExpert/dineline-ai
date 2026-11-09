@@ -108,11 +108,15 @@ export default function PhonePage() {
   sayRef.current = (text: string) => {
     if (!activeRef.current) return;
     setLine("speaking");
-    setAgentText(text);
+    setAgentText("");
     setCallerText("");
-    speakText(text, () => {
-      if (activeRef.current) listenRef.current();
-    });
+    speakText(
+      text,
+      () => {
+        if (activeRef.current) listenRef.current();
+      },
+      (soFar) => setAgentText(soFar),
+    );
   };
 
   listenRef.current = () => {
