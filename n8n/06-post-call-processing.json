@@ -1,0 +1,270 @@
+{
+  "name": "DineLine 06 \u00b7 Post-Call Processing",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## 06 \u00b7 Post-call processing\nVapi sends call events here. End-of-call reports (transcript, recording, AI summary, cost) are saved to the DineLine call log with the outcome and agents involved.\n\nActivate and set the Production URL as `VAPI_EVENTS_URL` before running `npm run setup:vapi` (or keep the default, which posts straight to the app).",
+        "height": 260,
+        "width": 380
+      },
+      "id": "3d86cd99-aae4-4e65-a580-d66d52229b2a",
+      "name": "About this workflow",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        20
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "dineline-vapi-events",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "1b625fef-6dc1-483c-8b90-c95c22d75df2",
+      "name": "Vapi call events",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        300
+      ],
+      "webhookId": "3ae36a15-2c1c-4188-a40a-399635470f04"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "d9b35ed4-cf8d-4d46-8cc6-2a80c98c6674",
+              "name": "appUrl",
+              "value": "https://YOUR-APP-URL",
+              "type": "string"
+            },
+            {
+              "id": "61d257e0-6438-416a-80ad-23b1353fab2f",
+              "name": "secret",
+              "value": "",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "5e0d4670-732a-4afc-9f1d-76f7a66bbdf5",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        300
+      ],
+      "notes": "Set your app URL (ngrok or Vercel) and the DINELINE_WEBHOOK_SECRET value here."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "30e0a578-d6b8-448a-84b9-043e15f2a9f9",
+              "leftValue": "={{ !$('Config').first().json.secret || ($('Vapi call events').first().json.headers['x-dineline-secret'] ?? $('Vapi call events').first().json.headers['x-vapi-secret']) === $('Config').first().json.secret }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "d950d10e-7984-42e0-8b9e-aa8141f2a17c",
+      "name": "Secret OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        440,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "6176f983-9f60-4847-9513-cdd73d2e194c",
+              "leftValue": "={{ $('Vapi call events').first().json.body.message?.type }}",
+              "rightValue": "end-of-call-report",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "4f5b502b-bbe1-4141-99e6-b9932a79be14",
+      "name": "End of call?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        660,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config').first().json.appUrl }}/api/vapi/webhook",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-dineline-secret",
+              "value": "={{ $('Config').first().json.secret }}"
+            }
+          ]
+        },
+        "options": {},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Vapi call events').first().json.body) }}"
+      },
+      "id": "ca137e67-e653-46ac-a86e-983a78b24166",
+      "name": "Save call to DineLine",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: true }) }}",
+        "options": {}
+      },
+      "id": "bc7b95fe-e836-4531-9a37-a448c17ef9b1",
+      "name": "Acknowledge",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1100,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ error: 'unauthorized' }) }}",
+        "options": {
+          "responseCode": 401
+        }
+      },
+      "id": "eabe7bfd-79b9-4798-a8a9-b3bda5cbd23e",
+      "name": "Reject (wrong secret)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        660,
+        460
+      ]
+    }
+  ],
+  "connections": {
+    "Vapi call events": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Secret OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Secret OK?": {
+      "main": [
+        [
+          {
+            "node": "End of call?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reject (wrong secret)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "End of call?": {
+      "main": [
+        [
+          {
+            "node": "Save call to DineLine",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Acknowledge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save call to DineLine": {
+      "main": [
+        [
+          {
+            "node": "Acknowledge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/New_York"
+  },
+  "tags": [],
+  "pinData": {}
+}

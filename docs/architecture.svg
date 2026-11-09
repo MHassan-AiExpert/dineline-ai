@@ -1,0 +1,104 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 700" width="1200" height="700" font-family="Segoe UI, Helvetica Neue, Arial, sans-serif">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10z" fill="#6c6882"/>
+    </marker>
+  </defs>
+  <rect width="1200" height="700" fill="#f3f4f8"/>
+  <text x="40" y="52" font-size="26" font-weight="700" fill="#1c1530">DineLine AI · how a call flows</text>
+  <text x="40" y="78" font-size="14.5" fill="#6c6882">Four Vapi agents share 15 business tools; every order and booking lands in Supabase, the kitchen board and the customer's phone.</text>
+
+  <!-- Caller -->
+  <g>
+    <rect x="40" y="250" width="150" height="96" rx="10" fill="#fff" stroke="#cfcfdd"/>
+    <text x="115" y="288" text-anchor="middle" font-size="15" font-weight="700" fill="#1c1530">Caller</text>
+    <text x="115" y="309" text-anchor="middle" font-size="12.5" fill="#6c6882">Phone (Twilio / Vapi</text>
+    <text x="115" y="326" text-anchor="middle" font-size="12.5" fill="#6c6882">number) or browser</text>
+  </g>
+
+  <!-- Vapi squad -->
+  <rect x="240" y="120" width="420" height="360" rx="14" fill="#1c1530"/>
+  <text x="262" y="152" font-size="15" font-weight="700" fill="#fff">Vapi Squad · DineLine Restaurant Crew</text>
+  <text x="262" y="172" font-size="12.5" fill="#bdb8cf">Deepgram Nova-3 in, GPT-4o-mini reasoning, Vapi voice out</text>
+
+  <rect x="355" y="194" width="190" height="62" rx="9" fill="#e8a013"/>
+  <text x="450" y="222" text-anchor="middle" font-size="14.5" font-weight="700" fill="#1c1530">Receptionist</text>
+  <text x="450" y="241" text-anchor="middle" font-size="12" fill="#1c1530">greets, detects intent, routes</text>
+
+  <g font-size="14" font-weight="700" text-anchor="middle">
+    <rect x="262" y="314" width="122" height="70" rx="9" fill="#d2453b"/>
+    <text x="323" y="343" fill="#fff">Order</text>
+    <text x="323" y="362" font-size="11.5" font-weight="400" fill="#fff">order, upsell, total</text>
+    <rect x="389" y="314" width="122" height="70" rx="9" fill="#2e7d5b"/>
+    <text x="450" y="343" fill="#fff">Reservation</text>
+    <text x="450" y="362" font-size="11.5" font-weight="400" fill="#fff">book, change, waitlist</text>
+    <rect x="516" y="314" width="122" height="70" rx="9" fill="#4b4fa8"/>
+    <text x="577" y="343" fill="#fff">FAQ</text>
+    <text x="577" y="362" font-size="11.5" font-weight="400" fill="#fff">hours, allergens</text>
+  </g>
+  <g stroke="#e8a013" stroke-width="1.6" fill="none" marker-end="url(#a)">
+    <path d="M410 256 L330 312"/>
+    <path d="M450 256 L450 312"/>
+    <path d="M490 256 L570 312"/>
+  </g>
+  <text x="450" y="420" text-anchor="middle" font-size="12.5" fill="#bdb8cf">Specialists hand callers back and forth with context,</text>
+  <text x="450" y="438" text-anchor="middle" font-size="12.5" fill="#bdb8cf">so one call can cover a question, an order and a booking.</text>
+
+  <path d="M190 298 L238 298" stroke="#6c6882" stroke-width="1.6" fill="none" marker-end="url(#a)"/>
+
+  <!-- Tools -->
+  <rect x="710" y="150" width="210" height="150" rx="10" fill="#fff" stroke="#cfcfdd"/>
+  <text x="726" y="178" font-size="15" font-weight="700" fill="#1c1530">Business tools (15)</text>
+  <text x="726" y="198" font-size="12" fill="#6c6882">/api/vapi/tools, or n8n 01–03</text>
+  <g font-size="12" fill="#1c1530">
+    <text x="726" y="224">get_menu · check_item</text>
+    <text x="726" y="242">price_order · place_order</text>
+    <text x="726" y="260">check_availability · create_booking</text>
+    <text x="726" y="278">search_knowledge_base · +7 more</text>
+  </g>
+  <path d="M660 240 L708 225" stroke="#6c6882" stroke-width="1.6" fill="none" marker-end="url(#a)"/>
+  <text x="664" y="214" font-size="11.5" fill="#6c6882">tool calls</text>
+
+  <!-- Supabase -->
+  <rect x="710" y="340" width="210" height="104" rx="10" fill="#fff" stroke="#cfcfdd"/>
+  <text x="726" y="368" font-size="15" font-weight="700" fill="#1c1530">Supabase Postgres</text>
+  <text x="726" y="389" font-size="12" fill="#6c6882">menu · orders · reservations</text>
+  <text x="726" y="406" font-size="12" fill="#6c6882">customers · calls · texts</text>
+  <text x="726" y="426" font-size="12" fill="#2e7d5b" font-weight="600">Realtime on orders</text>
+  <path d="M815 300 L815 338" stroke="#6c6882" stroke-width="1.6" fill="none" marker-end="url(#a)"/>
+
+  <!-- Dashboard -->
+  <rect x="960" y="150" width="200" height="150" rx="10" fill="#fff" stroke="#e8a013" stroke-width="2"/>
+  <text x="976" y="178" font-size="15" font-weight="700" fill="#1c1530">Kitchen dashboard</text>
+  <text x="976" y="198" font-size="12" fill="#6c6882">Next.js on Vercel</text>
+  <g font-size="12" fill="#1c1530">
+    <text x="976" y="224">Live order tickets + chime</text>
+    <text x="976" y="242">Reservation floor timeline</text>
+    <text x="976" y="260">Menu, call log, analytics</text>
+    <text x="976" y="278">Crew chatbot with live trace</text>
+  </g>
+  <path d="M920 380 L1060 380 L1060 302" stroke="#6c6882" stroke-width="1.6" fill="none" marker-end="url(#a)"/>
+
+  <!-- n8n -->
+  <rect x="710" y="490" width="450" height="150" rx="10" fill="#fff" stroke="#cfcfdd"/>
+  <text x="726" y="518" font-size="15" font-weight="700" fill="#1c1530">n8n automations</text>
+  <g font-size="12.5" fill="#1c1530">
+    <text x="726" y="545">04 Customer notifications (SMS / WhatsApp)</text>
+    <text x="726" y="565">05 Reservation reminders, every 15 min</text>
+    <text x="726" y="585">06 Post-call processing (transcript, summary)</text>
+    <text x="726" y="605">07 Daily owner report, 11 PM</text>
+  </g>
+  <text x="726" y="628" font-size="12" fill="#6c6882">01–03 optionally carry the voice tool calls</text>
+  <path d="M815 444 L815 488" stroke="#6c6882" stroke-width="1.6" fill="none" marker-end="url(#a)"/>
+
+  <!-- Twilio back to customer -->
+  <rect x="240" y="540" width="420" height="80" rx="10" fill="#fff" stroke="#cfcfdd"/>
+  <text x="262" y="572" font-size="15" font-weight="700" fill="#1c1530">Twilio SMS / WhatsApp</text>
+  <text x="262" y="594" font-size="12.5" fill="#6c6882">Order confirmed · ready for pickup · booking code · reminder</text>
+  <path d="M708 580 L662 580" stroke="#6c6882" stroke-width="1.6" fill="none" marker-end="url(#a)"/>
+  <path d="M240 580 L115 580 L115 348" stroke="#6c6882" stroke-width="1.6" fill="none" marker-end="url(#a)"/>
+
+  <!-- Vapi events -->
+  <path d="M660 450 C 690 470, 700 480, 708 500" stroke="#6c6882" stroke-width="1.6" fill="none" stroke-dasharray="5 4" marker-end="url(#a)"/>
+  <text x="560" y="510" font-size="11.5" fill="#6c6882">end-of-call report</text>
+</svg>

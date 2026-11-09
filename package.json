@@ -1,0 +1,42 @@
+{
+  "name": "dineline-ai",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Multi-agent AI voice crew for restaurants: phone ordering, table reservations and FAQs with a live kitchen dashboard.",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "test:crew": "tsx scripts/test-crew.ts",
+    "seed:supabase": "tsx scripts/seed-supabase.ts",
+    "setup:vapi": "tsx vapi/setup-vapi.ts",
+    "export:vapi": "tsx scripts/export-vapi-config.ts",
+    "seed:sql": "tsx scripts/generate-seed-sql.ts"
+  },
+  "dependencies": {
+    "@fontsource-variable/bricolage-grotesque": "^5.3.0",
+    "@fontsource-variable/hanken-grotesk": "^5.3.0",
+    "@fontsource/jetbrains-mono": "^5.3.0",
+    "@supabase/supabase-js": "^2.119.0",
+    "@vapi-ai/web": "^3.1.0",
+    "clsx": "^2.1.1",
+    "lucide-react": "^1.70.0",
+    "next": "^16.4.5",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "recharts": "^3.10.1",
+    "swr": "^2.5.1",
+    "tailwind-merge": "^3.7.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.5",
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "dotenv": "^16.4.7",
+    "tailwindcss": "^4.3.5",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}

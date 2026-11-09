@@ -1,0 +1,296 @@
+{
+  "name": "DineLine 04 \u00b7 Customer Notifications (SMS / WhatsApp)",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## 04 \u00b7 Customer notifications\nThe app posts every customer text here: order confirmations, ready / out for delivery updates, booking confirmations and cancellations.\n\n1. Set appUrl, secret and twilioFrom in **Config**.\n2. Pick your Twilio credential on both Twilio nodes.\n3. Activate and set the Production URL as `N8N_NOTIFY_WEBHOOK_URL` in `.env.local`.\n4. Set `TWILIO_CHANNEL=whatsapp` in the app to use WhatsApp.",
+        "height": 260,
+        "width": 380
+      },
+      "id": "881ca28e-f481-4364-82f2-f9cfaad26f44",
+      "name": "About this workflow",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        20
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "dineline-notify",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "e730424c-1580-4300-87ad-deb95c7094f6",
+      "name": "From DineLine app",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        300
+      ],
+      "webhookId": "689216ff-8711-4d2a-9c08-fddeb8fd01e1"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "1082deb2-c5cb-4c3e-8792-c7ac63aaa587",
+              "name": "appUrl",
+              "value": "https://YOUR-APP-URL",
+              "type": "string"
+            },
+            {
+              "id": "da6b9130-8f82-4a3d-aaeb-d2a2e079b04e",
+              "name": "secret",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "a6ac7e88-8dff-41f9-806e-3ff4838c0af5",
+              "name": "twilioFrom",
+              "value": "+1XXXXXXXXXX",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "f9d91c08-8446-41c0-83bd-01004ea06b02",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        300
+      ],
+      "notes": "Set your app URL (ngrok or Vercel) and the DINELINE_WEBHOOK_SECRET value here."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "65a97702-c7e9-4010-979f-afbc43d2168c",
+              "leftValue": "={{ !$('Config').first().json.secret || ($('From DineLine app').first().json.headers['x-dineline-secret'] ?? $('From DineLine app').first().json.headers['x-vapi-secret']) === $('Config').first().json.secret }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "1315b839-b49d-491b-a8c2-5ad1aa5010fa",
+      "name": "Secret OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        440,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "486b3be3-4665-4a4a-8551-6e1de7c8fcd5",
+              "leftValue": "={{ $('From DineLine app').first().json.body.channel }}",
+              "rightValue": "whatsapp",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "3b6129ab-56ba-498d-8b7f-de25f1402db4",
+      "name": "WhatsApp?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        660,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "from": "={{ $('Config').first().json.twilioFrom }}",
+        "to": "={{ $('From DineLine app').first().json.body.to }}",
+        "toWhatsapp": true,
+        "message": "={{ $('From DineLine app').first().json.body.body }}",
+        "options": {}
+      },
+      "id": "d099de1e-fb51-42e3-9085-9350f3ca2111",
+      "name": "Send WhatsApp",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        880,
+        120
+      ],
+      "notes": "Choose your Twilio credential (Account SID + Auth Token). For WhatsApp, use the sandbox number as twilioFrom in Config."
+    },
+    {
+      "parameters": {
+        "from": "={{ $('Config').first().json.twilioFrom }}",
+        "to": "={{ $('From DineLine app').first().json.body.to }}",
+        "toWhatsapp": false,
+        "message": "={{ $('From DineLine app').first().json.body.body }}",
+        "options": {}
+      },
+      "id": "a608d997-054d-4cb4-8547-64ea75cceb6f",
+      "name": "Send SMS",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        880,
+        320
+      ],
+      "notes": "Choose your Twilio credential (Account SID + Auth Token). For WhatsApp, use the sandbox number as twilioFrom in Config."
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: true }) }}",
+        "options": {}
+      },
+      "id": "609247f7-101f-4ca7-8b26-ed9509b77940",
+      "name": "Done",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1100,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ error: 'unauthorized' }) }}",
+        "options": {
+          "responseCode": 401
+        }
+      },
+      "id": "69980768-3fa7-4ada-bbfd-4a8f4ec4e33e",
+      "name": "Reject (wrong secret)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        660,
+        460
+      ]
+    }
+  ],
+  "connections": {
+    "From DineLine app": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Secret OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Secret OK?": {
+      "main": [
+        [
+          {
+            "node": "WhatsApp?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reject (wrong secret)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "WhatsApp?": {
+      "main": [
+        [
+          {
+            "node": "Send WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send SMS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "Done",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send SMS": {
+      "main": [
+        [
+          {
+            "node": "Done",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/New_York"
+  },
+  "tags": [],
+  "pinData": {}
+}

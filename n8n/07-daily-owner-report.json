@@ -1,0 +1,167 @@
+{
+  "name": "DineLine 07 \u00b7 Daily Owner Report (optional)",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## 07 \u00b7 Daily owner report\nEvery night at 11 PM (restaurant time) the owner gets a WhatsApp summary: calls handled, orders and revenue, bookings and covers, upsell rate and top dishes.\n\nSet ownerPhone in Config and pick the Twilio credential.",
+        "height": 260,
+        "width": 380
+      },
+      "id": "a9ab165d-fc24-4785-9ac0-d88d8326042e",
+      "name": "About this workflow",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        20
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 23 * * *"
+            }
+          ]
+        }
+      },
+      "id": "1212e59b-639d-4764-a32e-057da32c54ea",
+      "name": "Every night at 11 PM",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "72ed6cb4-9e0b-4b3c-b2ed-9fcbfe4ec6c1",
+              "name": "appUrl",
+              "value": "https://YOUR-APP-URL",
+              "type": "string"
+            },
+            {
+              "id": "e78d944a-b95c-4d70-a6fe-2c3ad90013fd",
+              "name": "secret",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "36f4ef4b-47ee-48aa-a32d-b26703ae8adc",
+              "name": "twilioFrom",
+              "value": "whatsapp:+14155238886",
+              "type": "string"
+            },
+            {
+              "id": "260c3580-cfff-430a-bdfa-fd8044940194",
+              "name": "ownerPhone",
+              "value": "+1XXXXXXXXXX",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "39e09e95-8260-4c6d-af00-99200cfb6d05",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        300
+      ],
+      "notes": "Set your app URL (ngrok or Vercel) and the DINELINE_WEBHOOK_SECRET value here."
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Config').first().json.appUrl }}/api/reports/daily",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-dineline-secret",
+              "value": "={{ $('Config').first().json.secret }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "0e8edb18-3376-41ba-8164-df64e8b9faa3",
+      "name": "Get today's numbers",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "from": "={{ $('Config').first().json.twilioFrom }}",
+        "to": "={{ $('Config').first().json.ownerPhone }}",
+        "toWhatsapp": true,
+        "message": "={{ $json.text }}",
+        "options": {}
+      },
+      "id": "ce61ff26-3618-41bf-a87d-87dc81b56cd0",
+      "name": "WhatsApp the owner",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        660,
+        300
+      ],
+      "notes": "Choose your Twilio credential (Account SID + Auth Token). For WhatsApp, use the sandbox number as twilioFrom in Config."
+    }
+  ],
+  "connections": {
+    "Every night at 11 PM": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Get today's numbers",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get today's numbers": {
+      "main": [
+        [
+          {
+            "node": "WhatsApp the owner",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/New_York"
+  },
+  "tags": [],
+  "pinData": {}
+}

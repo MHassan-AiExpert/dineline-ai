@@ -1,0 +1,275 @@
+{
+  "name": "DineLine 02 \u00b7 Order Placement (Vapi tools)",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## 02 \u00b7 Order placement\nUsed by the Order agent: price_order validates items and totals, place_order saves the order, puts the ticket on the kitchen board and triggers the confirmation text.\n\nSet Config, activate, then use the Production URL as `VAPI_TOOLS_URL_ORDERS`.",
+        "height": 260,
+        "width": 380
+      },
+      "id": "a062b21e-7047-4f34-9051-e7dbbb1a6c66",
+      "name": "About this workflow",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        20
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "dineline-orders",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "df2c3c1d-0dbc-4521-b5b9-f63cbd88f7b3",
+      "name": "Vapi tool call",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        300
+      ],
+      "webhookId": "8017427a-f0fb-4688-8bc3-1dfa2a1c2f0f"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "e03bad20-bc36-4cc8-9bf4-6ebf36769f8e",
+              "name": "appUrl",
+              "value": "https://YOUR-APP-URL",
+              "type": "string"
+            },
+            {
+              "id": "5bab86a9-ff76-4815-8bd3-feb2426d3610",
+              "name": "secret",
+              "value": "",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "c5662ba6-927b-487e-bfa6-8062660c725d",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        300
+      ],
+      "notes": "Set your app URL (ngrok or Vercel) and the DINELINE_WEBHOOK_SECRET value here."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "dfd9ef0c-d2f0-4ade-b133-16beee11d8cd",
+              "leftValue": "={{ !$('Config').first().json.secret || ($('Vapi tool call').first().json.headers['x-dineline-secret'] ?? $('Vapi tool call').first().json.headers['x-vapi-secret']) === $('Config').first().json.secret }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "96ad704e-d4c7-4983-9d1c-6ff72e539f09",
+      "name": "Secret OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        440,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Vapi sends { message: { type: 'tool-calls', toolCallList: [...], call: {...} } }\nconst body = $('Vapi tool call').first().json.body;\nconst msg = body.message ?? body;\nconst calls = msg.toolCallList ?? msg.toolCalls ?? [];\nconst allowed = [\"price_order\", \"place_order\"];\nreturn calls.map(tc => {\n  const raw = tc.function?.arguments ?? tc.arguments ?? {};\n  const args = typeof raw === 'string' ? JSON.parse(raw || '{}') : raw;\n  const name = tc.function?.name ?? tc.name;\n  return { json: { toolCallId: tc.id, name, allowed: allowed.includes(name), args, callId: msg.call?.id ?? '', callerPhone: msg.call?.customer?.number ?? '' } };\n});"
+      },
+      "id": "ba77a697-dda3-480b-9d12-cb801e60da98",
+      "name": "Split tool calls",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config').first().json.appUrl }}/api/tools/execute",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-dineline-secret",
+              "value": "={{ $('Config').first().json.secret }}"
+            }
+          ]
+        },
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1
+            }
+          }
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ name: $json.allowed ? $json.name : 'get_menu', args: $json.allowed ? $json.args : {}, callId: $json.callId, callerPhone: $json.callerPhone }) }}"
+      },
+      "id": "9199956e-3506-4408-9dcf-ac314dcb48ea",
+      "name": "Run tool in DineLine",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Vapi expects { results: [{ toolCallId, result }] } in the same order as the calls\nconst calls = $('Split tool calls').all();\nconst answers = $input.all();\nreturn [{ json: { results: calls.map((c, i) => ({\n  toolCallId: c.json.toolCallId,\n  name: c.json.name,\n  result: c.json.allowed\n    ? JSON.stringify({ ok: answers[i]?.json.ok, ...(answers[i]?.json.data ?? {}) })\n    : JSON.stringify({ ok: false, error: 'This tool is not handled by this workflow.' }),\n})) } }];",
+        "mode": "runOnceForAllItems"
+      },
+      "id": "4f477fc1-7b3c-4750-9c38-702769f92b7e",
+      "name": "Format for Vapi",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "a2ea3ddf-caab-46e0-8d07-cc87be221d3f",
+      "name": "Reply to Vapi",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1320,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ error: 'unauthorized' }) }}",
+        "options": {
+          "responseCode": 401
+        }
+      },
+      "id": "be909f17-c975-4455-a878-f0c2b2444e33",
+      "name": "Reject (wrong secret)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        660,
+        440
+      ]
+    }
+  ],
+  "connections": {
+    "Vapi tool call": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Secret OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Secret OK?": {
+      "main": [
+        [
+          {
+            "node": "Split tool calls",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reject (wrong secret)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split tool calls": {
+      "main": [
+        [
+          {
+            "node": "Run tool in DineLine",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run tool in DineLine": {
+      "main": [
+        [
+          {
+            "node": "Format for Vapi",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format for Vapi": {
+      "main": [
+        [
+          {
+            "node": "Reply to Vapi",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/New_York"
+  },
+  "tags": [],
+  "pinData": {}
+}

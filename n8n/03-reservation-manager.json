@@ -1,0 +1,275 @@
+{
+  "name": "DineLine 03 \u00b7 Reservation Manager (Vapi tools)",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## 03 \u00b7 Reservation manager\nUsed by the Reservation agent: availability, booking, changes, cancellations and the waitlist.\n\nSet Config, activate, then use the Production URL as `VAPI_TOOLS_URL_RESERVATIONS`.",
+        "height": 260,
+        "width": 380
+      },
+      "id": "2f168f96-29e5-428a-b8d7-8ab79685f0bc",
+      "name": "About this workflow",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        20
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "dineline-reservations",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "64c09eef-51c9-4faa-8f40-cba9ea0e6763",
+      "name": "Vapi tool call",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        300
+      ],
+      "webhookId": "4495f702-51ba-4d56-9cac-a3ce441bbac5"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "8e18646f-1d8c-4a7f-8eee-a9efd6b872fb",
+              "name": "appUrl",
+              "value": "https://YOUR-APP-URL",
+              "type": "string"
+            },
+            {
+              "id": "55ce3278-514c-4eda-b27d-deb71bda36fb",
+              "name": "secret",
+              "value": "",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "4d657ae5-5610-4f06-8e1b-dded52432b06",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        300
+      ],
+      "notes": "Set your app URL (ngrok or Vercel) and the DINELINE_WEBHOOK_SECRET value here."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "7aed83e9-b26b-4f15-bb1c-3bedb2e6f37f",
+              "leftValue": "={{ !$('Config').first().json.secret || ($('Vapi tool call').first().json.headers['x-dineline-secret'] ?? $('Vapi tool call').first().json.headers['x-vapi-secret']) === $('Config').first().json.secret }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "50260ff8-258e-4447-94c3-5c3958f47369",
+      "name": "Secret OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        440,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Vapi sends { message: { type: 'tool-calls', toolCallList: [...], call: {...} } }\nconst body = $('Vapi tool call').first().json.body;\nconst msg = body.message ?? body;\nconst calls = msg.toolCallList ?? msg.toolCalls ?? [];\nconst allowed = [\"check_availability\", \"create_booking\", \"find_booking\", \"modify_booking\", \"cancel_booking\", \"join_waitlist\"];\nreturn calls.map(tc => {\n  const raw = tc.function?.arguments ?? tc.arguments ?? {};\n  const args = typeof raw === 'string' ? JSON.parse(raw || '{}') : raw;\n  const name = tc.function?.name ?? tc.name;\n  return { json: { toolCallId: tc.id, name, allowed: allowed.includes(name), args, callId: msg.call?.id ?? '', callerPhone: msg.call?.customer?.number ?? '' } };\n});"
+      },
+      "id": "76d88110-a090-4b0c-863e-795e64e8e381",
+      "name": "Split tool calls",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config').first().json.appUrl }}/api/tools/execute",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-dineline-secret",
+              "value": "={{ $('Config').first().json.secret }}"
+            }
+          ]
+        },
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1
+            }
+          }
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ name: $json.allowed ? $json.name : 'get_menu', args: $json.allowed ? $json.args : {}, callId: $json.callId, callerPhone: $json.callerPhone }) }}"
+      },
+      "id": "e7e99671-71a8-4dff-8176-9cb658ff8daf",
+      "name": "Run tool in DineLine",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Vapi expects { results: [{ toolCallId, result }] } in the same order as the calls\nconst calls = $('Split tool calls').all();\nconst answers = $input.all();\nreturn [{ json: { results: calls.map((c, i) => ({\n  toolCallId: c.json.toolCallId,\n  name: c.json.name,\n  result: c.json.allowed\n    ? JSON.stringify({ ok: answers[i]?.json.ok, ...(answers[i]?.json.data ?? {}) })\n    : JSON.stringify({ ok: false, error: 'This tool is not handled by this workflow.' }),\n})) } }];",
+        "mode": "runOnceForAllItems"
+      },
+      "id": "f01cc259-679c-4047-b477-5cd73017b8e6",
+      "name": "Format for Vapi",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "48faede7-44e5-4ba5-b471-b506a37eecd4",
+      "name": "Reply to Vapi",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1320,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ error: 'unauthorized' }) }}",
+        "options": {
+          "responseCode": 401
+        }
+      },
+      "id": "5e4f57b8-1f64-4b52-bb23-17a557b0cfeb",
+      "name": "Reject (wrong secret)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        660,
+        440
+      ]
+    }
+  ],
+  "connections": {
+    "Vapi tool call": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Secret OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Secret OK?": {
+      "main": [
+        [
+          {
+            "node": "Split tool calls",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reject (wrong secret)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split tool calls": {
+      "main": [
+        [
+          {
+            "node": "Run tool in DineLine",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run tool in DineLine": {
+      "main": [
+        [
+          {
+            "node": "Format for Vapi",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format for Vapi": {
+      "main": [
+        [
+          {
+            "node": "Reply to Vapi",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/New_York"
+  },
+  "tags": [],
+  "pinData": {}
+}
