@@ -28,7 +28,7 @@ const BASE_URLS: Record<string, string> = {
 };
 
 const DEFAULT_MODELS: Record<string, string> = {
-  gemini: "gemini-2.5-flash",
+  gemini: "gemini-3.8-flash",
   openai: "gpt-4o-mini",
   groq: "llama-3.3-70b-versatile",
   openrouter: "openai/gpt-4o-mini",

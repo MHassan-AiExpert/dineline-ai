@@ -24,10 +24,10 @@ Use **Setup → Reset demo data** to start fresh at any time.
    ```env
    LLM_PROVIDER=gemini
    LLM_API_KEY=your-gemini-key
-   LLM_MODEL=gemini-2.5-flash
+   LLM_MODEL=gemini-3.8-flash
    ```
 
-3. Restart `npm run dev`. The sidebar now shows "gemini · gemini-2.5-flash" as the agent brain.
+3. Restart `npm run dev`. The sidebar now shows "gemini · gemini-3.8-flash" as the agent brain.
 
 OpenAI (`gpt-4o-mini`), Groq (`llama-3.3-70b-versatile`) and OpenRouter work the same way; change `LLM_PROVIDER` and `LLM_MODEL`. If the provider fails, the chat falls back to the built-in crew and shows a notice.
 

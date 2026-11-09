@@ -100,7 +100,9 @@ export async function runCrewTurn(input: { sessionId: string; message: string; c
       result = await llmTurn(session, cfg);
       mode = "llm";
     } catch (err) {
-      notice = `AI provider error, answered by the built-in demo crew instead: ${err instanceof Error ? err.message : String(err)}`;
+      const detail = err instanceof Error ? err.message : String(err);
+      console.error("[crew] LLM error:", detail);
+      notice = `The AI provider returned an error, so the built-in crew answered. Check LLM_MODEL and LLM_API_KEY in .env.local. (${detail.slice(0, 160)}${detail.length > 160 ? "…" : ""})`;
       result = await demoTurn(session, text);
     }
   } else {

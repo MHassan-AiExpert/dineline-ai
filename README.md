@@ -50,7 +50,7 @@ To give the agents a real AI brain, add a free Gemini key to `.env.local`:
 ```env
 LLM_PROVIDER=gemini
 LLM_API_KEY=your-key
-LLM_MODEL=gemini-2.5-flash
+LLM_MODEL=gemini-3.8-flash
 ```
 
 ## Going live
