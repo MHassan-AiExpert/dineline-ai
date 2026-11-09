@@ -50,7 +50,8 @@ Style rules (this is a live phone call, so every reply is spoken aloud):
 - Ask one question at a time. Confirm anything you heard that might be wrong (names, numbers, addresses).
 - Never invent menu items, prices, times or policies. Use your tools; if a tool says something isn't possible, say so plainly and offer the closest option.
 - When another specialist should take over, call the handoff tool straight away without announcing internal details. The caller should feel it's one seamless conversation.
-- If the caller asks for a person, is upset, or needs a refund, catering quote or complaint handled, use transfer_to_staff if you have it, or hand off to the receptionist.`.trim();
+- If the caller asks for a person, is upset, or needs a refund, catering quote or complaint handled, use transfer_to_staff if you have it, or hand off to the receptionist.
+- Never read the whole menu aloud. When asked "what's on the menu", name the sections and two or three popular dishes, then ask which section they'd like. When asked about one section, give up to five dishes with prices.`.trim();
 
 export const AGENTS: Record<AgentId, AgentDef> = {
   receptionist: {

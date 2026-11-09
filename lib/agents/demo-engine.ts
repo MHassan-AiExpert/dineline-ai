@@ -69,6 +69,7 @@ export function detectIntent(text: string, hasMenuItem: boolean): Intent {
   if (/\b(same as (last time|before)|my usual|reorder|repeat my( last)? order)\b/.test(t)) return "order";
   if (/\b(order|delivery|deliver it|pick ?up|takeout|take out|take away|to go|i'?d like|i want|i'?ll have|i'?ll take|can i get|could i get|get me|add)\b/.test(t) && !/\b(do you deliver|deliver to|delivery (area|zone|fee|time))\b/.test(t)) return "order";
   if (hasMenuItem && /\b(\d+|one|two|three|four|five|a|an)\s+\w+/.test(t) && !/\?|\b(is|does|are|contain|have)\b/.test(t)) return "order";
+  if (/\b(menu|starters?|appetizers?|desserts?|drinks?|curries|curry|breads?|sides|recommend|popular|specials?)\b/.test(t) && !/\b(i'?ll have|i want|can i get|add)\b/.test(t)) return "faq";
   if (/\?|\b(what|when|where|how|which|do you|does|is (the|your|it|there)|are (you|your|the)|can i (pay|park|bring)|hours|open|close|parking|halal|allergen|allergy|gluten|vegan|vegetarian|nut|dairy|spicy|address|location|wifi|kids|catering|payment)\b/.test(t)) return "faq";
   if (/^(hi|hello|hey|good (morning|afternoon|evening)|salam|assalam)/.test(t)) return "greeting";
   if (/\b(thank|thanks|bye|goodbye|cheers)\b/.test(t)) return "thanks";
@@ -634,7 +635,8 @@ export async function demoTurn(session: CrewSession, text: string): Promise<{ re
       return { reply: "I don't have that information to hand. I can connect you with a team member if you like, or help with an order or a booking.", events };
     }
     const facts = (res.data.facts as string[]).slice(0, 2).join(" ");
-    return { reply: `${facts} Is there anything else, or would you like to place an order?`, events };
+    // don't stack a second question after one the answer already asks
+    return { reply: /\?\s*$/.test(facts) ? facts : `${facts} Is there anything else, or would you like to place an order?`, events };
   }
 }
 

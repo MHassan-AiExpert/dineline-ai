@@ -739,19 +739,60 @@ const handlers: Record<string, Handler> = {
     if (/\b(pay|payment|card|cash|apple pay|amex)\b/.test(q)) facts.push(`We accept ${settings.paymentMethods.join(", ")}.`);
     if (/\b(phone|number|call you)\b/.test(q)) facts.push(`Our number is ${settings.phone}.`);
 
-    for (const entry of KNOWLEDGE_BASE) if (entry.keywords.some((k) => q.includes(k))) facts.push(entry.answer);
+    const hasWord = (k: string) => new RegExp(`\\b${k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`, "i").test(q);
+    for (const entry of KNOWLEDGE_BASE) if (entry.keywords.some(hasWord)) facts.push(entry.answer);
+
+    // Menu questions, answered the way a phone host would: short, then let the caller choose.
+    const money = (n: number) => `$${n.toFixed(2)}`;
+    const list = (items: MenuItem[], max = 6) => {
+      const shown = items.slice(0, max).map((m) => `${m.name} (${money(m.price)})`);
+      return items.length > max ? `${shown.join(", ")}, and ${items.length - max} more` : shown.join(", ");
+    };
+    const available = menu.filter((m) => m.isAvailable);
+    // signature dishes: one popular pick each from biryani, curries and the grill
+    const signature = ["Biryani & Rice", "Curries", "Grill"]
+      .map((c) => available.find((m) => m.popular && m.category === c))
+      .filter((m): m is MenuItem => !!m);
+    const dietaryAsk = /\b(vegan|vegetarian|veggie|gluten|dairy|nut|halal|allerg|spicy|mild)/.test(q);
+    const CATEGORY_WORDS: [RegExp, string][] = [
+      [/\b(starters?|appetizers?|apps|snacks?)\b/, "Starters"],
+      [/\b(grill|grilled|kebabs?|kababs?|bbq|barbecue|tandoori|tikka)\b/, "Grill"],
+      [/\b(curry|curries|gravy|karahi)\b/, "Curries"],
+      [/\b(biryani|biryanis|rice)\b/, "Biryani & Rice"],
+      [/\b(breads?|naans?|rotis?)\b/, "Breads"],
+      [/\b(sides?)\b/, "Sides"],
+      [/\b(desserts?|sweets?|sweet dish)\b/, "Desserts"],
+      [/\b(drinks?|beverages?|lassi|tea|chai|soda)\b/, "Drinks"],
+    ];
+    const asksList = /\b(what|which|any|list|options|have|got|serve|offer|tell|about|please)\b/.test(q) || q.trim().split(/\s+/).length <= 3;
+    const category = CATEGORY_WORDS.find(([re]) => re.test(q))?.[1];
+    if (category && asksList && !/\b(contain|allerg|gluten|dairy|nut|vegan|vegetarian|halal|price|cost|how much)\b/.test(q)) {
+      facts.push(`Our ${category.toLowerCase()}: ${list(available.filter((m) => m.category === category), 5)}.`);
+    } else if (!dietaryAsk && /\b(menu|kind of food|type of food|what food|cuisine|what do you (serve|have|sell))\b/.test(q)) {
+      const cats = [...new Set(available.map((m) => m.category))].map((c) => c.toLowerCase());
+      facts.push(`We serve Pakistani and North Indian food: ${cats.slice(0, -1).join(", ")} and ${cats.at(-1)}. Our most popular dishes are ${signature.map((m) => m.name).join(", ")}. Which section would you like to hear about?`);
+    }
+    if (/\b(recommend|suggest|popular|best|famous|signature|special|favou?rite|must try)\b/.test(q)) {
+      const [first, ...rest] = signature;
+      if (first)
+        facts.push(`Our guests' favourite is the ${first.name} (${money(first.price)}): ${first.description.charAt(0).toLowerCase()}${first.description.slice(1)} People also love the ${rest.map((m) => `${m.name} (${money(m.price)})`).join(" and the ")}.`);
+    }
 
     // Menu-aware answers: allergens / dietary for any dish mentioned
     const allergenWords = ["gluten", "dairy", "nut", "nuts", "fish", "milk", "lactose", "wheat", "vegan", "vegetarian", "allergen", "allergy", "contain", "free", "spicy"];
     const mentionsDish = matchMenu(q.replace(/\b(is|does|the|your|have|has|contain|contains|any|free|gluten|dairy|nut|nuts|vegan|vegetarian|spicy|it)\b/g, " "), menu).filter((m, _i, all) => m.score >= 0.6 && m.score >= all[0].score - 0.05).slice(0, 2);
-    for (const { item } of mentionsDish) {
+    const answeredCategory = facts.some((f) => /^Our [a-z& ]+: /.test(f));
+    for (const { item } of answeredCategory && !dietaryAsk ? [] : mentionsDish) {
       const allergens = item.allergens.length ? `contains ${item.allergens.join(", ")}` : "contains none of the major allergens (nuts, dairy, gluten, fish)";
       const tags = item.dietary.filter((d) => d !== "halal");
       facts.push(`${item.name}: ${allergens}${tags.length ? `; it's ${tags.join(", ")}` : ""}; spice level ${["mild", "medium-mild", "medium-hot", "hot"][item.spicy]}; $${item.price.toFixed(2)}${item.isAvailable ? "" : " (sold out today)"}.`);
     }
     if (!mentionsDish.length && allergenWords.some((w) => q.includes(w))) {
       const key = q.includes("gluten") || q.includes("wheat") ? "gluten-free" : q.includes("vegan") ? "vegan" : q.includes("vegetarian") ? "vegetarian" : null;
-      if (key && !facts.some((f) => f.toLowerCase().includes(`${key.split("-")[0]} options`))) facts.push(`${key[0].toUpperCase() + key.slice(1)} dishes: ${menu.filter((m) => m.dietary.includes(key) && m.isAvailable).map((m) => m.name).join(", ")}.`);
+      if (key && !facts.some((f) => f.toLowerCase().includes(`${key.split("-")[0]} options`))) {
+        const dishes = menu.filter((m) => m.dietary.includes(key) && m.isAvailable && !["Breads", "Sides", "Drinks"].includes(m.category));
+        facts.push(`Popular ${key} dishes include ${list(dishes, 6)}.`);
+      }
       const nutFree = /\bnut/.test(q);
       if (nutFree) facts.push(`Dishes that contain nuts: ${menu.filter((m) => m.allergens.includes("nuts")).map((m) => m.name).join(", ")}. Everything else is made without nuts.`);
     }
