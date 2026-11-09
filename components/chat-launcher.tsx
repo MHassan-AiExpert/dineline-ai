@@ -47,7 +47,7 @@ function Drawer({ onClose }: { onClose: () => void }) {
 export function ChatLauncher() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
-  if (pathname.startsWith("/playground")) return null;
+  if (pathname.startsWith("/playground") || pathname.startsWith("/phone")) return null;
   return (
     <>
       {open && <Drawer onClose={() => setOpen(false)} />}
