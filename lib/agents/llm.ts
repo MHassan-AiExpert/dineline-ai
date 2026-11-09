@@ -86,10 +86,10 @@ export async function chatCompletion(cfg: LlmConfig, messages: LlmMessage[], too
   for (const model of models) {
     for (let attempt = 0; attempt < 4; attempt++) {
       const remaining = deadline - Date.now();
-      if (remaining < 3000) break;
+      if (remaining < 1500) break;
       let res: Response;
       try {
-        res = await callOnce(cfg, model, messages, tools, Math.min(25000, remaining), effort);
+        res = await callOnce(cfg, model, messages, tools, remaining, effort);
       } catch (e) {
         lastError = e instanceof Error && e.name === "TimeoutError" ? "slow: the model took too long to answer" : e instanceof Error ? e.message : String(e);
         continue;
@@ -107,10 +107,10 @@ export async function chatCompletion(cfg: LlmConfig, messages: LlmMessage[], too
       }
       if (!RETRYABLE.has(res.status)) break; // wrong key or model name: retrying won't help
       const retryAfter = Number(res.headers.get("retry-after"));
-      const wait = Number.isFinite(retryAfter) && retryAfter > 0 ? Math.min(retryAfter * 1000, 4000) : 700 * 2 ** attempt;
-      await new Promise((r) => setTimeout(r, Math.min(wait, Math.max(0, deadline - Date.now() - 3000))));
+      const wait = Number.isFinite(retryAfter) && retryAfter > 0 ? Math.min(retryAfter * 1000, 1500) : 300 * 2 ** attempt;
+      await new Promise((r) => setTimeout(r, Math.min(wait, Math.max(0, deadline - Date.now() - 1500))));
     }
-    if (deadline - Date.now() < 3000) break;
+    if (deadline - Date.now() < 1500) break;
   }
   throw new Error(`LLM request failed: ${lastError || "slow: no time left to answer"}`);
 }

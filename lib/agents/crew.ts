@@ -18,9 +18,17 @@ export interface CrewReply {
 }
 
 const MAX_STEPS = 10;
-/** Total time one caller message may take across all model calls */
-const TURN_BUDGET_MS = 45000;
+/**
+ * Hard limit for one reply across all model calls. If the AI hasn't finished by then, the built-in
+ * crew answers instantly, so a caller never waits longer than this. Override with LLM_TURN_BUDGET_MS.
+ */
+const TURN_BUDGET_MS = Math.min(30000, Math.max(4000, Number(process.env.LLM_TURN_BUDGET_MS) || 9000));
 const now = () => new Date().toISOString();
+
+/** After two AI failures in a row, skip the AI for this long and answer instantly. */
+const BREAKER_COOLDOWN_MS = 60000;
+const gb = globalThis as unknown as { __dinelineBreaker?: { failures: number; lastFailureAt: number } };
+const llmBreaker = () => (gb.__dinelineBreaker ??= { failures: 0, lastFailureAt: 0 });
 
 function handoffTool(from: AgentId): LlmTool {
   const targets = AGENTS[from].handoffs;
@@ -98,11 +106,21 @@ export async function runCrewTurn(input: { sessionId: string; message: string; c
   let mode: CrewReply["mode"] = "demo";
   let notice: string | undefined;
 
-  if (cfg) {
+  const breaker = llmBreaker();
+  const cooling = cfg && breaker.failures >= 2 && Date.now() - breaker.lastFailureAt < BREAKER_COOLDOWN_MS;
+
+  if (cfg && cooling) {
+    // The AI just failed twice in a row: answer instantly instead of waiting on it again.
+    result = await demoTurn(session, text);
+    notice = "The AI model is slow right now, so the built-in crew is answering instantly. The AI is tried again in about a minute.";
+  } else if (cfg) {
     try {
       result = await llmTurn(session, cfg);
       mode = "llm";
+      breaker.failures = 0;
     } catch (err) {
+      breaker.failures++;
+      breaker.lastFailureAt = Date.now();
       const detail = err instanceof Error ? err.message : String(err);
       console.error("[crew] LLM error:", detail);
       const slow = /\bslow:|timeout|aborted/i.test(detail);
@@ -169,7 +187,7 @@ async function llmTurn(session: CrewSession, cfg: NonNullable<ReturnType<typeof 
       role: "system",
       content: def.prompt({ settings, callerPhone: session.callerPhone || undefined, callerName: session.callerName, channel: session.channel }) + facts,
     };
-    if (turnDeadline - Date.now() < 4000) throw new Error("LLM request failed: slow: the reply took longer than the time budget");
+    if (turnDeadline - Date.now() < 1500) throw new Error("LLM request failed: slow: the reply took longer than the time budget");
     const msg = await chatCompletion(cfg, [system, ...conversation, ...working], toolsFor(agent), turnDeadline);
     const calls = msg.tool_calls ?? [];
 
