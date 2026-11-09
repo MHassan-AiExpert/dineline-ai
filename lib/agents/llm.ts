@@ -53,33 +53,51 @@ export function llmConfig(): LlmConfig | null {
   };
 }
 
-export async function chatCompletion(cfg: LlmConfig, messages: LlmMessage[], tools: LlmTool[]): Promise<LlmMessage> {
-  const body: Record<string, unknown> = {
-    model: cfg.model,
-    messages,
-    temperature: 0.4,
-  };
+const RETRYABLE = new Set([408, 429, 500, 502, 503, 504]);
+
+async function callOnce(cfg: LlmConfig, model: string, messages: LlmMessage[], tools: LlmTool[]) {
+  const body: Record<string, unknown> = { model, messages, temperature: 0.4 };
   if (tools.length) {
     body.tools = tools;
     body.tool_choice = "auto";
   }
+  return fetch(`${cfg.baseUrl}/chat/completions`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${cfg.apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(40000),
+  });
+}
+
+/**
+ * Calls the model, retrying busy/overloaded responses (429/503…) with growing waits.
+ * If LLM_FALLBACK_MODEL is set, it is tried after the main model keeps failing.
+ */
+export async function chatCompletion(cfg: LlmConfig, messages: LlmMessage[], tools: LlmTool[]): Promise<LlmMessage> {
+  const models = [cfg.model, process.env.LLM_FALLBACK_MODEL?.trim()].filter((m): m is string => !!m);
   let lastError = "";
-  for (let attempt = 0; attempt < 2; attempt++) {
-    const res = await fetch(`${cfg.baseUrl}/chat/completions`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${cfg.apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(45000),
-    });
-    if (res.ok) {
-      const json = (await res.json()) as { choices?: { message: LlmMessage }[] };
-      const msg = json.choices?.[0]?.message;
-      if (!msg) throw new Error("LLM returned no message");
-      return msg;
+  for (const model of models) {
+    for (let attempt = 0; attempt < 4; attempt++) {
+      let res: Response;
+      try {
+        res = await callOnce(cfg, model, messages, tools);
+      } catch (e) {
+        lastError = e instanceof Error ? e.message : String(e);
+        await new Promise((r) => setTimeout(r, 800 * 2 ** attempt));
+        continue;
+      }
+      if (res.ok) {
+        const json = (await res.json()) as { choices?: { message: LlmMessage }[] };
+        const msg = json.choices?.[0]?.message;
+        if (!msg) throw new Error("LLM returned no message");
+        return msg;
+      }
+      lastError = `${res.status} ${(await res.text()).slice(0, 300)}`;
+      if (!RETRYABLE.has(res.status)) break; // wrong key or model name: retrying won't help
+      const retryAfter = Number(res.headers.get("retry-after"));
+      const wait = Number.isFinite(retryAfter) && retryAfter > 0 ? Math.min(retryAfter * 1000, 5000) : 800 * 2 ** attempt;
+      await new Promise((r) => setTimeout(r, wait));
     }
-    lastError = `${res.status} ${(await res.text()).slice(0, 300)}`;
-    if (res.status !== 429 && res.status < 500) break;
-    await new Promise((r) => setTimeout(r, 1200));
   }
   throw new Error(`LLM request failed: ${lastError}`);
 }
