@@ -55,17 +55,20 @@ export function llmConfig(): LlmConfig | null {
 
 const RETRYABLE = new Set([408, 429, 500, 502, 503, 504]);
 
-async function callOnce(cfg: LlmConfig, model: string, messages: LlmMessage[], tools: LlmTool[]) {
+
+async function callOnce(cfg: LlmConfig, model: string, messages: LlmMessage[], tools: LlmTool[], timeoutMs: number, effort: string | null) {
   const body: Record<string, unknown> = { model, messages, temperature: 0.4 };
   if (tools.length) {
     body.tools = tools;
     body.tool_choice = "auto";
   }
+  // Short thinking keeps voice-style replies fast (Gemini and OpenAI reasoning models accept this)
+  if (effort) body.reasoning_effort = effort;
   return fetch(`${cfg.baseUrl}/chat/completions`, {
     method: "POST",
     headers: { Authorization: `Bearer ${cfg.apiKey}`, "Content-Type": "application/json" },
     body: JSON.stringify(body),
-    signal: AbortSignal.timeout(40000),
+    signal: AbortSignal.timeout(timeoutMs),
   });
 }
 
@@ -75,15 +78,20 @@ async function callOnce(cfg: LlmConfig, model: string, messages: LlmMessage[], t
  */
 export async function chatCompletion(cfg: LlmConfig, messages: LlmMessage[], tools: LlmTool[]): Promise<LlmMessage> {
   const models = [cfg.model, process.env.LLM_FALLBACK_MODEL?.trim()].filter((m): m is string => !!m);
+  const deadline = Date.now() + 40000; // keep the caller waiting at most ~40s in total
+  // LLM_REASONING_EFFORT: low | medium | high, or "off" to never send it. Default: low for Gemini.
+  const effortSetting = process.env.LLM_REASONING_EFFORT?.trim().toLowerCase();
+  let effort: string | null = effortSetting === "off" ? null : effortSetting || (cfg.provider === "gemini" ? "low" : null);
   let lastError = "";
   for (const model of models) {
     for (let attempt = 0; attempt < 4; attempt++) {
+      const remaining = deadline - Date.now();
+      if (remaining < 3000) break;
       let res: Response;
       try {
-        res = await callOnce(cfg, model, messages, tools);
+        res = await callOnce(cfg, model, messages, tools, Math.min(25000, remaining), effort);
       } catch (e) {
-        lastError = e instanceof Error ? e.message : String(e);
-        await new Promise((r) => setTimeout(r, 800 * 2 ** attempt));
+        lastError = e instanceof Error && e.name === "TimeoutError" ? "timeout: the model took too long to answer" : e instanceof Error ? e.message : String(e);
         continue;
       }
       if (res.ok) {
@@ -93,11 +101,16 @@ export async function chatCompletion(cfg: LlmConfig, messages: LlmMessage[], too
         return msg;
       }
       lastError = `${res.status} ${(await res.text()).slice(0, 300)}`;
+      if (res.status === 400 && effort && /reasoning/i.test(lastError)) {
+        effort = null; // this model doesn't accept reasoning_effort: retry straight away without it
+        continue;
+      }
       if (!RETRYABLE.has(res.status)) break; // wrong key or model name: retrying won't help
       const retryAfter = Number(res.headers.get("retry-after"));
-      const wait = Number.isFinite(retryAfter) && retryAfter > 0 ? Math.min(retryAfter * 1000, 5000) : 800 * 2 ** attempt;
-      await new Promise((r) => setTimeout(r, wait));
+      const wait = Number.isFinite(retryAfter) && retryAfter > 0 ? Math.min(retryAfter * 1000, 4000) : 700 * 2 ** attempt;
+      await new Promise((r) => setTimeout(r, Math.min(wait, Math.max(0, deadline - Date.now() - 3000))));
     }
+    if (deadline - Date.now() < 3000) break;
   }
   throw new Error(`LLM request failed: ${lastError}`);
 }

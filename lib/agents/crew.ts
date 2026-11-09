@@ -102,7 +102,10 @@ export async function runCrewTurn(input: { sessionId: string; message: string; c
     } catch (err) {
       const detail = err instanceof Error ? err.message : String(err);
       console.error("[crew] LLM error:", detail);
-      notice = `The AI provider returned an error, so the built-in crew answered. Check LLM_MODEL and LLM_API_KEY in .env.local. (${detail.slice(0, 160)}${detail.length > 160 ? "…" : ""})`;
+      const busy = /\b(429|500|502|503|504)\b|timeout|high demand|overloaded|unavailable/i.test(detail);
+      notice = busy
+        ? "The AI provider is busy right now, so the built-in crew answered this message. The next message tries the AI again automatically."
+        : `The AI provider returned an error, so the built-in crew answered. Check LLM_MODEL and LLM_API_KEY in .env.local. (${detail.slice(0, 160)}${detail.length > 160 ? "…" : ""})`;
       result = await demoTurn(session, text);
     }
   } else {
