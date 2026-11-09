@@ -91,7 +91,7 @@ export async function startConversation(input: { sessionId: string; callerPhone:
 }
 
 /** Runs one caller turn through the multi-agent crew. */
-export async function runCrewTurn(input: { sessionId: string; message: string; callerPhone?: string }): Promise<CrewReply> {
+export async function runCrewTurn(input: { sessionId: string; message: string; callerPhone?: string; fast?: boolean }): Promise<CrewReply> {
   let session = getSession(input.sessionId);
   if (!session) {
     await startConversation({ sessionId: input.sessionId, callerPhone: input.callerPhone ?? "" });
@@ -101,7 +101,8 @@ export async function runCrewTurn(input: { sessionId: string; message: string; c
   session.history.push({ role: "user", content: text });
   session.transcript.push({ role: "caller", text, at: now() });
 
-  const cfg = llmConfig();
+  // fast = answer with the built-in crew only (instant replies, e.g. for voice demos)
+  const cfg = input.fast ? null : llmConfig();
   let result: { reply: string; events: TraceEvent[] };
   let mode: CrewReply["mode"] = "demo";
   let notice: string | undefined;

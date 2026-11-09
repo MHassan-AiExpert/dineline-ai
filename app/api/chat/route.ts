@@ -11,6 +11,8 @@ interface Body {
   message?: string;
   callerPhone?: string;
   action?: "start" | "message" | "end";
+  /** Answer with the built-in crew only, for instant replies */
+  fast?: boolean;
 }
 
 /** Web chat entry point for the agent crew (used by the dashboard chatbot). */
@@ -28,5 +30,5 @@ export async function POST(req: Request) {
   }
   const message = body.message?.trim();
   if (!message) return bad("Type a message to send.");
-  return NextResponse.json(await runCrewTurn({ sessionId: body.sessionId, message, callerPhone }));
+  return NextResponse.json(await runCrewTurn({ sessionId: body.sessionId, message, callerPhone, fast: body.fast === true }));
 }

@@ -45,6 +45,9 @@ export default function PhonePage() {
   const [caller, setCaller] = useState(CALLERS[0]);
   const [bg, setBg] = useState<"light" | "dark">("light");
   const [controls, setControls] = useState(true);
+  const [fast, setFast] = useState(true);
+  const fastRef = useRef(true);
+  fastRef.current = fast;
 
   const [screen, setScreen] = useState<Screen>("contact");
   const [line, setLine] = useState<Line>("connecting");
@@ -127,7 +130,15 @@ export default function PhonePage() {
     let finalText = "";
     let interimText = ""; // Edge sometimes stops without finalising the last phrase
     setLine("listening");
+    let silence: ReturnType<typeof setTimeout> | null = null;
     rec.onresult = (e: any) => {
+      // end the turn after a short pause instead of waiting for the browser's slower default
+      if (silence) clearTimeout(silence);
+      silence = setTimeout(() => {
+        try {
+          rec.stop();
+        } catch {}
+      }, 900);
       let interim = "";
       for (let i = e.resultIndex; i < e.results.length; i++) {
         const t = e.results[i][0].transcript;
@@ -144,6 +155,7 @@ export default function PhonePage() {
       }
     };
     rec.onend = async () => {
+      if (silence) clearTimeout(silence);
       if (!activeRef.current || mutedRef.current) return;
       const said = (finalText + " " + interimText).trim();
       if (!said) {
@@ -152,7 +164,7 @@ export default function PhonePage() {
       }
       setLine("thinking");
       try {
-        const r = await post({ sessionId: sessionRef.current, message: said, callerPhone: caller.phone });
+        const r = await post({ sessionId: sessionRef.current, message: said, callerPhone: caller.phone, fast: fastRef.current });
         if (!activeRef.current) return;
         setAgent(r.agent);
         sayRef.current(r.reply);
@@ -412,6 +424,17 @@ export default function PhonePage() {
               ))}
             </select>
           </label>
+          <p className="text-muted">Replies</p>
+          <div className="mt-0.5 mb-2 flex gap-1">
+            {[
+              { v: true, label: "Fast (instant)" },
+              { v: false, label: "AI (Gemini)" },
+            ].map(({ v, label }) => (
+              <button key={label} onClick={() => setFast(v)} className={cn("flex-1 rounded-md py-1", fast === v ? "bg-ink text-white" : "bg-paper ring-1 ring-line")}>
+                {label}
+              </button>
+            ))}
+          </div>
           <div className="mb-2 flex gap-1">
             {(["light", "dark"] as const).map((b) => (
               <button key={b} onClick={() => setBg(b)} className={cn("flex-1 rounded-md py-1 capitalize", bg === b ? "bg-ink text-white" : "bg-paper ring-1 ring-line")}>
