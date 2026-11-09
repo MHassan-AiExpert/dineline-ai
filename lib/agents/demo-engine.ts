@@ -225,7 +225,7 @@ export async function demoTurn(session: CrewSession, text: string): Promise<{ re
       if (line && size) {
         line.size = size.name;
         // "two family packs" answers the size and the quantity together
-        const qty = lower.match(/\b(\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten)\b/);
+        const qty = lower.match(/\b(\d{1,2}|two|three|four|five|six|seven|eight|nine|ten)\b/) ?? lower.match(/^\s*(one)\b/); // "the family one" isn't a quantity
         if (qty) line.quantity = NUM_WORDS[qty[1]] ?? Number(qty[1]);
         o.awaiting = undefined;
         o.sizeFor = undefined;

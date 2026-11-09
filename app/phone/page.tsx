@@ -125,6 +125,7 @@ export default function PhonePage() {
     }
     recRef.current = rec;
     let finalText = "";
+    let interimText = ""; // Edge sometimes stops without finalising the last phrase
     setLine("listening");
     rec.onresult = (e: any) => {
       let interim = "";
@@ -133,6 +134,7 @@ export default function PhonePage() {
         if (e.results[i].isFinal) finalText += t;
         else interim += t;
       }
+      interimText = interim;
       setCallerText((finalText + interim).trim());
     };
     rec.onerror = (e: any) => {
@@ -143,7 +145,7 @@ export default function PhonePage() {
     };
     rec.onend = async () => {
       if (!activeRef.current || mutedRef.current) return;
-      const said = finalText.trim();
+      const said = (finalText + " " + interimText).trim();
       if (!said) {
         setTimeout(() => listenRef.current(), 150);
         return;

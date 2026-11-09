@@ -201,6 +201,7 @@ export function CrewChat({ chat, compact = false, callerPhone }: { chat: CrewCha
     if (!rec) return;
     recRef.current = rec;
     let finalText = "";
+    let interimText = ""; // Edge sometimes stops without finalising the last phrase
     setHeard("");
     setCallState("listening");
     rec.onresult = (e: any) => {
@@ -210,6 +211,7 @@ export function CrewChat({ chat, compact = false, callerPhone }: { chat: CrewCha
         if (e.results[i].isFinal) finalText += t;
         else interim += t;
       }
+      interimText = interim;
       setHeard((finalText + interim).trim());
     };
     rec.onerror = (e: any) => {
@@ -220,7 +222,7 @@ export function CrewChat({ chat, compact = false, callerPhone }: { chat: CrewCha
     };
     rec.onend = async () => {
       if (callRef.current !== "listening") return;
-      const said = finalText.trim();
+      const said = (finalText + " " + interimText).trim();
       if (!said) {
         setTimeout(() => listenRef.current(), 150); // silence: keep listening
         return;
@@ -291,6 +293,7 @@ export function CrewChat({ chat, compact = false, callerPhone }: { chat: CrewCha
     if (!rec) return;
     recRef.current = rec;
     let finalText = "";
+    let interimText = ""; // Edge sometimes stops without finalising the last phrase
     rec.onresult = (e: any) => {
       let interim = "";
       for (let i = e.resultIndex; i < e.results.length; i++) {
@@ -298,11 +301,13 @@ export function CrewChat({ chat, compact = false, callerPhone }: { chat: CrewCha
         if (e.results[i].isFinal) finalText += t;
         else interim += t;
       }
+      interimText = interim;
       setDraft((finalText + interim).trim());
     };
     rec.onend = () => {
       setListening(false);
-      if (finalText.trim()) submit(finalText);
+      const said = (finalText + " " + interimText).trim();
+      if (said) submit(said);
     };
     rec.onerror = () => setListening(false);
     setListening(true);
