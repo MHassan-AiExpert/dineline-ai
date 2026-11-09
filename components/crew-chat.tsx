@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowUp, Mic, MicOff, RotateCcw, Volume2, VolumeX, Wrench, CornerDownRight, PhoneForwarded } from "lucide-react";
+import { ArrowUp, Mic, MicOff, RotateCcw, Volume2, VolumeX, Wrench, CornerDownRight, PhoneForwarded, Phone, PhoneOff, AudioLines } from "lucide-react";
 import { AGENT_META, cn, TZ } from "@/lib/client";
 import type { AgentId, TraceEvent } from "@/lib/types";
 import { AgentDot } from "./ui";
@@ -53,6 +53,41 @@ function getRecognition(): any | null {
   r.interimResults = true;
   r.maxAlternatives = 1;
   return r;
+}
+
+/** Picks the most natural English voice the browser offers (Edge "Natural" voices sound best). */
+function pickVoice(): SpeechSynthesisVoice | undefined {
+  if (typeof window === "undefined" || !window.speechSynthesis) return undefined;
+  const voices = window.speechSynthesis.getVoices().filter((v) => /^en[-_](US|GB)/i.test(v.lang));
+  return (
+    voices.find((v) => /natural|neural/i.test(v.name) && /aria|jenny|ava|emma|michelle|sonia|libby/i.test(v.name)) ??
+    voices.find((v) => /natural|neural/i.test(v.name)) ??
+    voices.find((v) => /google us english/i.test(v.name)) ??
+    voices.find((v) => /samantha|zira|female/i.test(v.name)) ??
+    voices[0]
+  );
+}
+
+/** Speaks text sentence by sentence (avoids Chrome cutting long utterances) and calls done at the end. */
+function speakText(text: string, done: () => void) {
+  const synth = typeof window !== "undefined" ? window.speechSynthesis : undefined;
+  if (!synth) return done();
+  synth.cancel();
+  // Make written details sound natural when spoken: "(+$18.00)" -> ", $18.00 extra,"
+  const spoken = text.replace(/\(\+(\$[\d.]+)\)/g, ", $1 extra,").replace(/[()]/g, "").replace(/\s+,/g, ",").replace(/,\s*([?.!])/g, "$1");
+  // split into sentences only at . ! ? followed by a space, so "$18.00" stays whole
+  const parts = spoken.split(/(?<=[.!?])\s+/).filter(Boolean);
+  const voice = pickVoice();
+  parts.forEach((part, i) => {
+    const u = new SpeechSynthesisUtterance(part.trim());
+    if (voice) u.voice = voice;
+    u.rate = 1.05;
+    if (i === parts.length - 1) {
+      u.onend = done;
+      u.onerror = done;
+    }
+    synth.speak(u);
+  });
 }
 
 export function useCrewChat(callerPhone: string) {
@@ -146,18 +181,97 @@ export function CrewChat({ chat, compact = false, callerPhone }: { chat: CrewCha
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [chat.messages.length, chat.busy]);
 
-  // Speak replies aloud (browser voice) when enabled
+  // ── Voice call mode: speak each reply, then listen hands-free, like a phone call ──
+  type CallState = "off" | "speaking" | "listening" | "thinking";
+  const [call, setCall] = useState<CallState>("off");
+  const [heard, setHeard] = useState("");
+  const [micError, setMicError] = useState<string | null>(null);
+  const callRef = useRef<CallState>("off");
+  const sendRef = useRef(chat.sendMessage);
+  sendRef.current = chat.sendMessage;
+  const setCallState = (state: CallState) => {
+    callRef.current = state;
+    setCall(state);
+  };
+
+  const listenRef = useRef<() => void>(() => {});
+  listenRef.current = () => {
+    if (callRef.current === "off") return;
+    const rec = getRecognition();
+    if (!rec) return;
+    recRef.current = rec;
+    let finalText = "";
+    setHeard("");
+    setCallState("listening");
+    rec.onresult = (e: any) => {
+      let interim = "";
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const t = e.results[i][0].transcript;
+        if (e.results[i].isFinal) finalText += t;
+        else interim += t;
+      }
+      setHeard((finalText + interim).trim());
+    };
+    rec.onerror = (e: any) => {
+      if (e?.error === "not-allowed" || e?.error === "service-not-allowed") {
+        setMicError("Allow microphone access in your browser to start a voice call.");
+        setCallState("off");
+      }
+    };
+    rec.onend = async () => {
+      if (callRef.current !== "listening") return;
+      const said = finalText.trim();
+      if (!said) {
+        setTimeout(() => listenRef.current(), 150); // silence: keep listening
+        return;
+      }
+      setCallState("thinking");
+      const reply = await sendRef.current(said);
+      if (!reply && (callRef.current as CallState) !== "off") listenRef.current(); // error: listen again
+    };
+    rec.start();
+  };
+
+  const startCall = () => {
+    setMicError(null);
+    setSpeak(false);
+    setCallState("speaking");
+    const lastAgent = chat.messages.filter((m) => m.role === "assistant").at(-1);
+    lastSpoken.current = chat.messages.at(-1)?.id ?? null;
+    if (lastAgent) speakText(lastAgent.text, () => listenRef.current());
+    else listenRef.current();
+  };
+
+  const endCall = () => {
+    setCallState("off");
+    setHeard("");
+    try {
+      recRef.current?.abort?.();
+    } catch {
+      /* already stopped */
+    }
+    window.speechSynthesis?.cancel();
+  };
+
+  useEffect(() => () => {
+    callRef.current = "off";
+    try {
+      recRef.current?.abort?.();
+    } catch {}
+    if (typeof window !== "undefined") window.speechSynthesis?.cancel();
+  }, []);
+
+  // Speak replies aloud: always during a voice call, otherwise when the speaker toggle is on
   useEffect(() => {
     const last = chat.messages.at(-1);
-    if (!speak || !last || last.role !== "assistant" || lastSpoken.current === last.id) return;
+    if (!last || last.role !== "assistant" || lastSpoken.current === last.id) return;
+    const inCall = callRef.current !== "off";
+    if (!speak && !inCall) return;
     lastSpoken.current = last.id;
-    if (typeof window === "undefined" || !window.speechSynthesis) return;
-    window.speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(last.text);
-    u.rate = 1.04;
-    const voice = window.speechSynthesis.getVoices().find((v) => /en-(US|GB)/.test(v.lang) && /female|samantha|aria|jenny|google us/i.test(v.name));
-    if (voice) u.voice = voice;
-    window.speechSynthesis.speak(u);
+    if (inCall) setCallState("speaking");
+    speakText(last.text, () => {
+      if (callRef.current !== "off") listenRef.current();
+    });
   }, [chat.messages, speak]);
 
   const submit = async (text?: string) => {
@@ -211,6 +325,16 @@ export function CrewChat({ chat, compact = false, callerPhone }: { chat: CrewCha
           </div>
         </div>
         <div className="flex items-center gap-0.5">
+          {canListen && call === "off" && (
+            <button
+              onClick={startCall}
+              className="mr-1 inline-flex h-8 items-center gap-1.5 rounded-full bg-cardamom px-3 text-[13px] font-semibold text-white transition-colors hover:bg-cardamom/90"
+              title="Talk to the crew hands-free, like a phone call"
+            >
+              <Phone className="size-3.5" />
+              {compact ? "Call" : "Start voice call"}
+            </button>
+          )}
           <VapiCallButton compact />
           <button
             onClick={() => {
@@ -273,10 +397,11 @@ export function CrewChat({ chat, compact = false, callerPhone }: { chat: CrewCha
         )}
         {chat.error && <p className="rounded-md bg-chili-wash px-3 py-2 text-[13px] text-chili">{chat.error}</p>}
         {chat.notice && <p className="rounded-md bg-saffron-wash px-3 py-2 text-[12.5px] text-saffron-deep">{chat.notice}</p>}
+        {micError && <p className="rounded-md bg-chili-wash px-3 py-2 text-[13px] text-chili">{micError}</p>}
       </div>
 
       {/* suggestions */}
-      {showSuggestions && !chat.busy && (
+      {showSuggestions && !chat.busy && call === "off" && (
         <div className="flex gap-1.5 overflow-x-auto px-4 pb-2 scrollbar-thin">
           {SUGGESTIONS.slice(0, compact ? 4 : 6)
             .filter((s) => callerPhone || !/last time|my order/i.test(s))
@@ -288,8 +413,52 @@ export function CrewChat({ chat, compact = false, callerPhone }: { chat: CrewCha
         </div>
       )}
 
+      {/* voice call panel */}
+      {call !== "off" && (
+        <div className="border-t border-line bg-ink px-4 py-3.5 text-white">
+          <div className="flex items-center gap-3.5">
+            <span
+              className={cn(
+                "relative grid size-12 shrink-0 place-items-center rounded-full transition-colors",
+                call === "listening" ? "bg-chili" : call === "speaking" ? "bg-saffron text-ink" : "bg-ink-3",
+              )}
+            >
+              {call === "listening" ? (
+                <span className="eq flex h-5 items-end gap-[3px]" aria-hidden>
+                  <span className="w-[3px] rounded-full bg-white" />
+                  <span className="w-[3px] rounded-full bg-white" />
+                  <span className="w-[3px] rounded-full bg-white" />
+                  <span className="w-[3px] rounded-full bg-white" />
+                </span>
+              ) : call === "speaking" ? (
+                <AudioLines className="size-5" />
+              ) : (
+                <span className="typing flex gap-1">
+                  <span className="size-1.5 rounded-full bg-white" />
+                  <span className="size-1.5 rounded-full bg-white" />
+                  <span className="size-1.5 rounded-full bg-white" />
+                </span>
+              )}
+            </span>
+            <div className="min-w-0 flex-1" aria-live="polite">
+              <p className="text-[14.5px] font-semibold">
+                {call === "listening" ? "Listening… go ahead" : call === "speaking" ? `${AGENT_META[chat.agent].short} is speaking` : "Thinking…"}
+              </p>
+              <p className="truncate text-[13px] text-white/60">
+                {call === "listening" ? heard || "Speak naturally, it sends when you pause" : call === "thinking" ? heard : "Wait for the reply, then speak"}
+              </p>
+            </div>
+            <button onClick={endCall} className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-full bg-chili px-4 text-[13.5px] font-semibold text-white hover:bg-chili/90">
+              <PhoneOff className="size-4" />
+              End
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* composer */}
       <form
+        hidden={call !== "off"}
         onSubmit={(e) => {
           e.preventDefault();
           submit();
