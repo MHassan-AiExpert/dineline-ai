@@ -57,9 +57,9 @@ export function demoGreeting(restaurant: string, firstName?: string) {
     : `Thanks for calling ${restaurant}, this is Aria. Are you calling to place an order, book a table, or with a question?`;
 }
 
-type Intent = "order" | "reservation" | "faq" | "status" | "human" | "modify_booking" | "cancel_booking" | "greeting" | "thanks" | null;
+export type Intent = "order" | "reservation" | "faq" | "status" | "human" | "modify_booking" | "cancel_booking" | "greeting" | "thanks" | null;
 
-function detectIntent(text: string, hasMenuItem: boolean): Intent {
+export function detectIntent(text: string, hasMenuItem: boolean): Intent {
   const t = text.toLowerCase();
   if (/\b(manager|human|real person|someone real|staff member|speak to (a|some)one|talk to (a|some)one|operator)\b/.test(t)) return "human";
   if (/\b(where'?s|where is|status of|track)\b.*\border\b|\border status\b|\bis my order\b/.test(t)) return "status";

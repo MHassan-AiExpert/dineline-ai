@@ -4,7 +4,8 @@ import { getStore } from "../store";
 import { AGENTS } from "./definitions";
 import { chatCompletion, llmConfig, type LlmMessage, type LlmTool } from "./llm";
 import { createSession, getSession, syncCallRecord, type CrewSession } from "./session";
-import { demoGreeting, demoTurn } from "./demo-engine";
+import { demoGreeting, demoTurn, detectIntent } from "./demo-engine";
+import { matchMenu } from "../menu-match";
 
 export interface CrewReply {
   sessionId: string;
@@ -17,6 +18,8 @@ export interface CrewReply {
 }
 
 const MAX_STEPS = 10;
+/** Total time one caller message may take across all model calls */
+const TURN_BUDGET_MS = 45000;
 const now = () => new Date().toISOString();
 
 function handoffTool(from: AgentId): LlmTool {
@@ -102,10 +105,13 @@ export async function runCrewTurn(input: { sessionId: string; message: string; c
     } catch (err) {
       const detail = err instanceof Error ? err.message : String(err);
       console.error("[crew] LLM error:", detail);
-      const busy = /\b(429|500|502|503|504)\b|timeout|high demand|overloaded|unavailable/i.test(detail);
-      notice = busy
-        ? "The AI provider is busy right now, so the built-in crew answered this message. The next message tries the AI again automatically."
-        : `The AI provider returned an error, so the built-in crew answered. Check LLM_MODEL and LLM_API_KEY in .env.local. (${detail.slice(0, 160)}${detail.length > 160 ? "…" : ""})`;
+      const slow = /\bslow:|timeout|aborted/i.test(detail);
+      const busy = /\b(429|500|502|503|504)\b|high demand|overloaded|unavailable|quota|rate/i.test(detail);
+      notice = slow
+        ? "The AI model was too slow to answer in time, so the built-in crew replied. The next message tries the AI again."
+        : busy
+          ? "The AI provider is busy or rate-limited right now, so the built-in crew replied. The next message tries the AI again."
+          : `The AI provider returned an error, so the built-in crew answered. Check LLM_MODEL and LLM_API_KEY in .env.local. (${detail.slice(0, 160)}${detail.length > 160 ? "…" : ""})`;
       result = await demoTurn(session, text);
     }
   } else {
@@ -136,6 +142,25 @@ async function llmTurn(session: CrewSession, cfg: NonNullable<ReturnType<typeof 
   let working: LlmMessage[] = [];
   let agent = session.activeAgent;
   let handoffs = 0;
+  const turnDeadline = Date.now() + TURN_BUDGET_MS;
+
+  // Fast routing: when the receptionist is on and the request is clear, hand off without a model call.
+  if (agent === "receptionist") {
+    const lastUser = session.history.filter((h) => h.role === "user").at(-1)?.content ?? "";
+    const menu = await getStore().listMenu();
+    const intent = detectIntent(lastUser, matchMenu(lastUser, menu).some((m) => m.score >= 0.85));
+    const route: Partial<Record<string, AgentId>> = { order: "order", reservation: "reservation", modify_booking: "reservation", cancel_booking: "reservation", faq: "faq" };
+    const to = intent ? route[intent] : undefined;
+    if (to) {
+      const reason = `caller said: "${lastUser.slice(0, 90)}"`;
+      events.push({ type: "handoff", from: agent, to, reason, at: now() });
+      events.push({ type: "agent", agent: to, at: now() });
+      session.facts.push(`Receptionist routed the caller to ${to}: ${reason}`);
+      if (!session.agentsUsed.includes(to)) session.agentsUsed.push(to);
+      agent = to;
+      handoffs++;
+    }
+  }
 
   for (let step = 0; step < MAX_STEPS; step++) {
     const def = AGENTS[agent];
@@ -144,7 +169,8 @@ async function llmTurn(session: CrewSession, cfg: NonNullable<ReturnType<typeof 
       role: "system",
       content: def.prompt({ settings, callerPhone: session.callerPhone || undefined, callerName: session.callerName, channel: session.channel }) + facts,
     };
-    const msg = await chatCompletion(cfg, [system, ...conversation, ...working], toolsFor(agent));
+    if (turnDeadline - Date.now() < 4000) throw new Error("LLM request failed: slow: the reply took longer than the time budget");
+    const msg = await chatCompletion(cfg, [system, ...conversation, ...working], toolsFor(agent), turnDeadline);
     const calls = msg.tool_calls ?? [];
 
     if (!calls.length) {

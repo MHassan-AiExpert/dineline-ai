@@ -76,9 +76,9 @@ async function callOnce(cfg: LlmConfig, model: string, messages: LlmMessage[], t
  * Calls the model, retrying busy/overloaded responses (429/503…) with growing waits.
  * If LLM_FALLBACK_MODEL is set, it is tried after the main model keeps failing.
  */
-export async function chatCompletion(cfg: LlmConfig, messages: LlmMessage[], tools: LlmTool[]): Promise<LlmMessage> {
+export async function chatCompletion(cfg: LlmConfig, messages: LlmMessage[], tools: LlmTool[], deadlineAt?: number): Promise<LlmMessage> {
   const models = [cfg.model, process.env.LLM_FALLBACK_MODEL?.trim()].filter((m): m is string => !!m);
-  const deadline = Date.now() + 40000; // keep the caller waiting at most ~40s in total
+  const deadline = deadlineAt ?? Date.now() + 40000; // keep the caller waiting at most ~40s in total
   // LLM_REASONING_EFFORT: low | medium | high, or "off" to never send it. Default: low for Gemini.
   const effortSetting = process.env.LLM_REASONING_EFFORT?.trim().toLowerCase();
   let effort: string | null = effortSetting === "off" ? null : effortSetting || (cfg.provider === "gemini" ? "low" : null);
@@ -91,7 +91,7 @@ export async function chatCompletion(cfg: LlmConfig, messages: LlmMessage[], too
       try {
         res = await callOnce(cfg, model, messages, tools, Math.min(25000, remaining), effort);
       } catch (e) {
-        lastError = e instanceof Error && e.name === "TimeoutError" ? "timeout: the model took too long to answer" : e instanceof Error ? e.message : String(e);
+        lastError = e instanceof Error && e.name === "TimeoutError" ? "slow: the model took too long to answer" : e instanceof Error ? e.message : String(e);
         continue;
       }
       if (res.ok) {
@@ -112,5 +112,5 @@ export async function chatCompletion(cfg: LlmConfig, messages: LlmMessage[], too
     }
     if (deadline - Date.now() < 3000) break;
   }
-  throw new Error(`LLM request failed: ${lastError}`);
+  throw new Error(`LLM request failed: ${lastError || "slow: no time left to answer"}`);
 }
