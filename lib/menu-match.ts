@@ -35,6 +35,14 @@ const ALIASES: Record<string, string> = {
   palak: "Saag Paneer",
   "palak paneer": "Saag Paneer",
   naan: "Butter Naan",
+  "garlic nan": "Garlic Naan",
+  "garlic non": "Garlic Naan",
+  "butter nan": "Butter Naan",
+  "cheese nan": "Cheese Naan",
+  "mango lassie": "Mango Lassi",
+  lassie: "Mango Lassi",
+  "lamb biriyani": "Lamb Biryani",
+  "chicken biriyani": "Chicken Biryani",
   nan: "Butter Naan",
   roti: "Tandoori Roti",
   rice: "Jeera Rice",
@@ -99,7 +107,9 @@ export function matchMenu(query: string, menu: MenuItem[]): MenuMatch[] {
     let score = 0;
     if (n === q) score = 1;
     else if (n.includes(q) && q.length >= 4) score = 0.9;
-    else if (q.includes(n)) score = 0.92;
+    // the full dish name heard inside the sentence beats a generic shortcut ("lamb biryani" over "biryani"),
+    // unless the shortcut itself is longer and more specific ("chicken tikka masala" means Butter Chicken)
+    else if (q.includes(n)) score = aliasTarget && normalize(aliasTarget[0]).length > n.length ? 0.9 : 0.97;
     else {
       const it = tokens(item.name);
       const exact = qt.filter((t) => it.includes(t)).length;
