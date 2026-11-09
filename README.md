@@ -55,7 +55,7 @@ LLM_MODEL=gemini-3.8-flash
 
 ## Going live
 
-Full step-by-step instructions are in **[docs/SETUP.md](docs/SETUP.md)**. In short:
+Full step-by-step instructions are in **[docs/SETUP.md](docs/SETUP.md)**. The full technical delivery report (architecture, agents, CRM, cost model, testing) is in **[docs/DineLine-AI-Technical-Delivery-Report.pdf](docs/DineLine-AI-Technical-Delivery-Report.pdf)**. In short:
 
 1. **Supabase:** run `supabase/schema.sql` and `supabase/seed.sql`, set `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`, then `npm run seed:supabase` for demo history.
 2. **Public URL:** deploy to Vercel or run an ngrok / Cloudflare tunnel, and set `PUBLIC_APP_URL`.
@@ -119,7 +119,7 @@ n8n/                  Seven importable n8n workflows
 supabase/             schema.sql and seed.sql
 vapi/                 Squad setup script and exported squad config
 scripts/              Crew test runner, Supabase seeder, SQL and config generators
-docs/                 Setup guide, architecture diagram, screenshots
+docs/                 Setup guide, delivery report (PDF), architecture diagram, screenshots
 ```
 
 ## Testing
