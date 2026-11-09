@@ -62,6 +62,24 @@ function tokens(s: string): string[] {
   return normalize(s).split(" ").filter(Boolean);
 }
 
+/** Edit distance, used to forgive typos like "lamp biryani" or "biriani". */
+function editDistance(a: string, b: string): number {
+  const dp = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)]);
+  for (let j = 1; j <= b.length; j++) dp[0][j] = j;
+  for (let i = 1; i <= a.length; i++)
+    for (let j = 1; j <= b.length; j++)
+      dp[i][j] = Math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+  return dp[a.length][b.length];
+}
+
+/** Two words match if equal, or close enough for their length (1 typo from 4 letters, 2 from 8). */
+function sameWord(a: string, b: string): boolean {
+  if (a === b) return true;
+  const len = Math.min(a.length, b.length);
+  if (len < 4) return false;
+  return editDistance(a, b) <= (len >= 8 ? 2 : 1);
+}
+
 export interface MenuMatch {
   item: MenuItem;
   score: number;
@@ -84,8 +102,11 @@ export function matchMenu(query: string, menu: MenuItem[]): MenuMatch[] {
     else if (q.includes(n)) score = 0.92;
     else {
       const it = tokens(item.name);
-      const overlap = qt.filter((t) => it.includes(t)).length;
-      score = overlap ? (overlap / Math.max(it.length, qt.length)) * 0.85 : 0;
+      const exact = qt.filter((t) => it.includes(t)).length;
+      const fuzzy = it.filter((w) => qt.some((t) => sameWord(t, w))).length;
+      const overlap = Math.max(exact, fuzzy);
+      // every word of the dish name heard (allowing typos) counts almost like an exact match
+      score = overlap === it.length && overlap > exact ? 0.96 : overlap ? (overlap / Math.max(it.length, qt.length)) * 0.85 : 0;
     }
     if (aliasTarget && item.name === aliasTarget[1]) score = Math.max(score, 0.95);
     return { item, score };

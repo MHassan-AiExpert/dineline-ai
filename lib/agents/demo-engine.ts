@@ -104,6 +104,7 @@ async function parseItems(text: string): Promise<{ items: ParsedItem[]; unknown:
     if (size === "large") size = "family";
     if (size === "small") size = "regular";
     const notesMatch = rest.match(/\b(no [a-z]+|extra [a-z]+|without [a-z]+|mild|medium|very spicy|extra spicy|less spicy)\b/g);
+    rest = rest.replace(/\b(packs?|portions?|plates?|orders?|servings?|ones?|pieces?)\b/g, " ").replace(/\s+/g, " ").trim();
     const nameText = rest.replace(/\b(family|regular|half|full|large|small)\b(\s+size)?/g, "").replace(/\b(no [a-z]+|extra [a-z]+|without [a-z]+|mild|medium|very spicy|extra spicy|less spicy)\b/g, "").trim();
     if (!nameText || /^(that'?s all|that'?s it|nothing else|delivery|pickup|pick up|thanks|thank you|yes|no|ok|okay)$/.test(nameText)) continue;
     const item = bestMatch(nameText, menu);
@@ -222,8 +223,12 @@ export async function demoTurn(session: CrewSession, text: string): Promise<{ re
       const size = item?.sizes.find((s) => lower.includes(s.name.toLowerCase())) ?? (/\b(big|large)\b/.test(lower) ? item?.sizes[1] : /\b(small|normal|standard)\b/.test(lower) ? item?.sizes[0] : undefined);
       if (line && size) {
         line.size = size.name;
+        // "two family packs" answers the size and the quantity together
+        const qty = lower.match(/\b(\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten)\b/);
+        if (qty) line.quantity = NUM_WORDS[qty[1]] ?? Number(qty[1]);
         o.awaiting = undefined;
         o.sizeFor = undefined;
+        answeredField = true;
       } else if (line && item) {
         return { reply: `Which size for the ${item.name}: ${item.sizes.map((s) => `${s.name}${s.price ? ` (+${money(s.price)})` : ""}`).join(" or ")}?`, events };
       }
